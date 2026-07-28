@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #eef1f4;
+  --paper-deep: #e2e7ec;
+  --ink: #14222e;
+  --ink-muted: #5a6b78;
+  --accent: #0f6b5c;
+  --background: var(--paper);
+  --foreground: var(--ink);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #dfe8ef 0%, transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, #d5e4df 0%, transparent 50%),
+    linear-gradient(180deg, var(--paper) 0%, var(--paper-deep) 100%);
+  color: var(--ink);
+  min-height: 100vh;
+}
+
+.prose-review h1,
+.prose-review h2,
+.prose-review h3 {
+  font-family: var(--font-display), serif;
+  font-weight: 600;
+  margin-top: 1.25em;
+  margin-bottom: 0.4em;
+}
+
+.prose-review p {
+  margin: 0.6em 0;
+}
+
+.prose-review ul,
+.prose-review ol {
+  margin: 0.6em 0;
+  padding-left: 1.25rem;
+}
+
+.prose-review li {
+  margin: 0.25em 0;
+}
+
+.prose-review code {
+  font-size: 0.9em;
+  background: rgb(20 34 46 / 0.06);
+  padding: 0.1em 0.35em;
+  border-radius: 2px;
+}
+
+.prose-review pre {
+  overflow-x: auto;
+  background: rgb(20 34 46 / 0.06);
+  padding: 0.85rem 1rem;
+  border-radius: 4px;
+  margin: 0.85em 0;
+}
