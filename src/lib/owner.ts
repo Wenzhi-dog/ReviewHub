@@ -1,16 +1,7 @@
-import { cookies, headers } from "next/headers";
-
-export const OWNER_COOKIE = "rh_owner";
-export const OWNER_HEADER = "x-rh-owner";
-
+/**
+ * 身份入口：现阶段返回共享主体，实现全平台同一份数据。
+ * 接登录后改为从 session 取真实用户 id，下游 requireOwnerId → owner_id 链路不变。
+ */
 export async function requireOwnerId(): Promise<string> {
-  const h = await headers();
-  const fromHeader = h.get(OWNER_HEADER);
-  if (fromHeader) return fromHeader;
-
-  const jar = await cookies();
-  const existing = jar.get(OWNER_COOKIE)?.value;
-  if (existing) return existing;
-
-  throw new Error("缺少所有者标识，请刷新页面后重试。");
+  return process.env.SHARED_OWNER_ID?.trim() || "shared";
 }
