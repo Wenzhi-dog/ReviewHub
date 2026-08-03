@@ -283,8 +283,11 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
       }
 
       setAnswerProgress({ done: 0, total: freshIds.length });
+      const ANSWER_CONCURRENCY = 5;
       let done = 0;
-      for (const qid of freshIds) {
+      let nextIndex = 0;
+
+      async function generateOne(qid: string) {
         const res = await fetch("/api/ai/answer", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -295,6 +298,22 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
         done += 1;
         setAnswerProgress({ done, total: freshIds.length });
       }
+
+      async function worker() {
+        while (true) {
+          const i = nextIndex;
+          nextIndex += 1;
+          if (i >= freshIds.length) return;
+          await generateOne(freshIds[i]!);
+        }
+      }
+
+      await Promise.all(
+        Array.from(
+          { length: Math.min(ANSWER_CONCURRENCY, freshIds.length) },
+          () => worker(),
+        ),
+      );
 
       const ready = await fetch(`/api/topics/${topic.id}`, {
         method: "PATCH",
@@ -583,7 +602,7 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
       {step === "answers" ? (
         <section className="space-y-4">
           <p className="text-sm text-[var(--ink-muted)]">
-            正在逐题生成答案…
+            正在并行生成答案…
           </p>
           <div className="h-2 overflow-hidden rounded-full bg-[var(--ink)]/10">
             <div
