@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  DEFAULT_MODEL_ID,
   getModelLabel,
   MODEL_OPTIONS,
   isValidModelId,
+  resolveModelOption,
 } from "@/lib/ai/models";
 import type { Chapter, Question, Topic } from "@/lib/db/schema";
 
@@ -22,9 +22,7 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
   const router = useRouter();
   const [topic, setTopic] = useState(initialTopic);
   const [modelId, setModelId] = useState(
-    isValidModelId(initialTopic.modelId)
-      ? initialTopic.modelId
-      : DEFAULT_MODEL_ID,
+    resolveModelOption(initialTopic.modelId).id,
   );
   const [chapters, setChapters] = useState<EditableChapter[]>(
     initialChapters.map((c) => ({

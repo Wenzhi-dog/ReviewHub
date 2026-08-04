@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { generateText } from "ai";
 import { eq } from "drizzle-orm";
 import { answerPrompt } from "@/lib/ai/prompts";
-import { getLanguageModel } from "@/lib/ai/provider";
+import { getModelRequest } from "@/lib/ai/provider";
 import { getDb } from "@/lib/db";
 import { chapters, questions } from "@/lib/db/schema";
 import { getOwnedTopic, touchTopic } from "@/lib/db/queries";
@@ -36,8 +36,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "主题不存在" }, { status: 404 });
     }
 
+    const { model, providerOptions } = getModelRequest(topic.modelId);
     const { text } = await generateText({
-      model: getLanguageModel(topic.modelId),
+      model,
+      providerOptions,
       prompt: answerPrompt({
         topicTitle: topic.title,
         chapterTitle: row.chapter.title,

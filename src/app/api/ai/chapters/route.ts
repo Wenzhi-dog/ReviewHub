@@ -3,7 +3,7 @@ import { generateText, Output } from "ai";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { chaptersPrompt } from "@/lib/ai/prompts";
-import { getLanguageModel } from "@/lib/ai/provider";
+import { getModelRequest } from "@/lib/ai/provider";
 import { getDb } from "@/lib/db";
 import { chapters } from "@/lib/db/schema";
 import { getOwnedTopic, listChapters, touchTopic } from "@/lib/db/queries";
@@ -43,8 +43,10 @@ export async function POST(request: Request) {
     }
 
     const existing = await listChapters(topic.id);
+    const { model, providerOptions } = getModelRequest(topic.modelId);
     const { output } = await generateText({
-      model: getLanguageModel(topic.modelId),
+      model,
+      providerOptions,
       output: Output.object({ schema: chaptersSchema }),
       prompt: chaptersPrompt({
         title: topic.title,

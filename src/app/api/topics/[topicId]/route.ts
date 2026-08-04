@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
-import { isValidModelId } from "@/lib/ai/models";
+import { isValidModelId, resolveModelOption } from "@/lib/ai/models";
 import { getDb } from "@/lib/db";
 import { topics, type TopicStatus } from "@/lib/db/schema";
 import { getOwnedTopic } from "@/lib/db/queries";
@@ -57,7 +57,7 @@ export async function PATCH(
       updates.status = body.status;
     }
     if (isValidModelId(body.modelId)) {
-      updates.modelId = body.modelId;
+      updates.modelId = resolveModelOption(body.modelId).id;
     }
 
     const db = getDb();

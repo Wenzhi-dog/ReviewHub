@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import {
   DEFAULT_MODEL_ID,
   isValidModelId,
+  resolveModelOption,
 } from "@/lib/ai/models";
 import { getDb } from "@/lib/db";
 import { topics } from "@/lib/db/schema";
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
     }
 
     const modelId = isValidModelId(body.modelId)
-      ? body.modelId
+      ? resolveModelOption(body.modelId).id
       : DEFAULT_MODEL_ID;
 
     const db = getDb();

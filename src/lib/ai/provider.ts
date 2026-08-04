@@ -24,12 +24,41 @@ const providerFactories: Record<
   // Future: openai, anthropic, etc.
 };
 
-/** Resolve a LanguageModel from a catalog model id (e.g. deepseek/deepseek-chat). */
-export function getLanguageModel(modelId: string | null | undefined): LanguageModel {
+export type ModelRequestConfig = {
+  model: LanguageModel;
+  providerOptions?: {
+    deepseek: {
+      thinking: { type: "enabled" | "disabled" };
+      reasoningEffort?: "high";
+    };
+  };
+};
+
+/** Resolve model + DeepSeek thinking options from a catalog id. */
+export function getModelRequest(
+  modelId: string | null | undefined,
+): ModelRequestConfig {
   const option = resolveModelOption(modelId);
   const factory = providerFactories[option.provider];
   if (!factory) {
     throw new Error(`未支持的模型提供商：${option.provider}`);
   }
-  return factory(option.apiModel);
+
+  const model = factory(option.apiModel);
+
+  if (option.provider !== "deepseek") {
+    return { model };
+  }
+
+  return {
+    model,
+    providerOptions: {
+      deepseek: {
+        thinking: { type: option.thinking },
+        ...(option.thinking === "enabled"
+          ? { reasoningEffort: "high" as const }
+          : {}),
+      },
+    },
+  };
 }
