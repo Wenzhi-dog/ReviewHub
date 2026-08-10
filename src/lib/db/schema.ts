@@ -19,8 +19,10 @@ export const topics = pgTable("topics", {
   id: uuid("id").defaultRandom().primaryKey(),
   ownerId: text("owner_id").notNull(),
   title: text("title").notNull(),
-  /** Catalog id from MODEL_OPTIONS, e.g. deepseek/deepseek-v4-flash */
-  modelId: text("model_id").notNull().default("deepseek/deepseek-v4-flash"),
+  /** Catalog id from MODEL_OPTIONS, e.g. deepseek/deepseek-v4-flash-thinking */
+  modelId: text("model_id")
+    .notNull()
+    .default("deepseek/deepseek-v4-flash-thinking"),
   status: text("status").$type<TopicStatus>().notNull().default("chapters"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()

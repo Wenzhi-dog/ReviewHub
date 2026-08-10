@@ -1,9 +1,8 @@
-import { NextResponse } from "next/server";
-import { generateText, Output } from "ai";
 import { eq } from "drizzle-orm";
-import { z } from "zod";
+import { NextResponse } from "next/server";
+import { createAgentStreamResponse } from "@/lib/ai/agent-stream";
 import { questionsPrompt } from "@/lib/ai/prompts";
-import { getModelRequest } from "@/lib/ai/provider";
+import { questionsSchema } from "@/lib/ai/schemas";
 import { getDb } from "@/lib/db";
 import { chapters, questions } from "@/lib/db/schema";
 import {
@@ -13,15 +12,7 @@ import {
 } from "@/lib/db/queries";
 import { requireOwnerId } from "@/lib/owner";
 
-const questionsSchema = z.object({
-  questions: z
-    .array(
-      z.object({
-        stem: z.string(),
-      }),
-    )
-    .min(1),
-});
+export const maxDuration = 120;
 
 export async function POST(request: Request) {
   try {
@@ -56,11 +47,11 @@ export async function POST(request: Request) {
     }
 
     const existing = await listQuestions(chapter.id, true);
-    const { model, providerOptions } = getModelRequest(topic.modelId);
-    const { output } = await generateText({
-      model,
-      providerOptions,
-      output: Output.object({ schema: questionsSchema }),
+
+    return createAgentStreamResponse({
+      modelId: topic.modelId,
+      schema: questionsSchema,
+      resultKey: "questions",
       prompt: questionsPrompt({
         topicTitle: topic.title,
         chapterTitle: chapter.title,
@@ -70,24 +61,19 @@ export async function POST(request: Request) {
           .map((q) => ({ stem: q.stem })),
         feedback: body.feedback?.trim() || undefined,
       }),
+      persist: async (output) => {
+        await db.delete(questions).where(eq(questions.chapterId, chapter.id));
+        await db.insert(questions).values(
+          output.questions.map((q, i) => ({
+            chapterId: chapter.id,
+            stem: q.stem.trim(),
+            sortOrder: i,
+          })),
+        );
+        await touchTopic(topic.id);
+        return listQuestions(chapter.id);
+      },
     });
-
-    if (!output) {
-      return NextResponse.json({ error: "模型未返回有效小题" }, { status: 502 });
-    }
-
-    await db.delete(questions).where(eq(questions.chapterId, chapter.id));
-    await db.insert(questions).values(
-      output.questions.map((q, i) => ({
-        chapterId: chapter.id,
-        stem: q.stem.trim(),
-        sortOrder: i,
-      })),
-    );
-    await touchTopic(topic.id);
-
-    const rows = await listQuestions(chapter.id);
-    return NextResponse.json({ questions: rows });
   } catch (e) {
     const message = e instanceof Error ? e.message : "生成小题失败";
     return NextResponse.json({ error: message }, { status: 500 });

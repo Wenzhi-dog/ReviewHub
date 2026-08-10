@@ -8,7 +8,12 @@ import {
   isValidModelId,
   resolveModelOption,
 } from "@/lib/ai/models";
+import {
+  consumeAgentStream,
+  type AgentActivityState,
+} from "@/lib/ai/consume-agent-stream";
 import type { Chapter, Question, Topic } from "@/lib/db/schema";
+import { AgentActivity } from "@/components/wizard/agent-activity";
 
 type Props = {
   topic: Topic;
@@ -41,8 +46,13 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [answerProgress, setAnswerProgress] = useState({ done: 0, total: 0 });
+  const [agentActivity, setAgentActivity] = useState<AgentActivityState | null>(
+    null,
+  );
 
   const step = topic.status;
+  const resolvedActiveChapterId =
+    activeChapterId ?? chapters.find((c) => c.id)?.id ?? null;
 
   const loadChapterQuestions = useCallback(async (chapterId: string) => {
     const res = await fetch(`/api/chapters/${chapterId}/questions`);
@@ -65,27 +75,25 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
   }, []);
 
   useEffect(() => {
-    if (step === "questions" && chapters.length > 0) {
-      const firstId = chapters[0]?.id;
-      if (firstId) setActiveChapterId(firstId);
-      void (async () => {
-        for (const ch of chapters) {
-          if (ch.id && !questionsByChapter[ch.id]) {
-            try {
-              await loadChapterQuestions(ch.id);
-            } catch {
-              /* ignore until generate */
-            }
+    if (step !== "questions" || chapters.length === 0) return;
+    void (async () => {
+      for (const ch of chapters) {
+        if (ch.id && !questionsByChapter[ch.id]) {
+          try {
+            await loadChapterQuestions(ch.id);
+          } catch {
+            /* ignore until generate */
           }
         }
-      })();
-    }
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
   async function generateChapters(withFeedback?: string) {
     setBusy(true);
     setError(null);
+    setAgentActivity({ reasoning: "", searches: [], label: "拆分章节" });
     try {
       const res = await fetch("/api/ai/chapters", {
         method: "POST",
@@ -95,10 +103,14 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
           feedback: withFeedback || undefined,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "生成失败");
+      const rows = await consumeAgentStream<Chapter[]>({
+        response: res,
+        resultKey: "chapters",
+        onActivity: (activity) =>
+          setAgentActivity({ ...activity, label: "拆分章节" }),
+      });
       setChapters(
-        (data.chapters as Chapter[]).map((c) => ({
+        rows.map((c) => ({
           id: c.id,
           title: c.title,
           summary: c.summary,
@@ -162,18 +174,29 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
       if (!patch.ok) throw new Error(patchData.error || "进入下一步失败");
       setTopic(patchData.topic);
 
-      setBusy(true);
       for (const ch of rows) {
+        setAgentActivity({
+          reasoning: "",
+          searches: [],
+          label: `出题 · ${ch.title}`,
+        });
         const res = await fetch("/api/ai/questions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ chapterId: ch.id }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || `生成「${ch.title}」小题失败`);
+        const questions = await consumeAgentStream<Question[]>({
+          response: res,
+          resultKey: "questions",
+          onActivity: (activity) =>
+            setAgentActivity({
+              ...activity,
+              label: `出题 · ${ch.title}`,
+            }),
+        });
         setQuestionsByChapter((prev) => ({
           ...prev,
-          [ch.id]: (data.questions as Question[]).map((q) => ({
+          [ch.id]: questions.map((q) => ({
             id: q.id,
             stem: q.stem,
           })),
@@ -188,24 +211,38 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
   }
 
   async function generateQuestionsForActive(withFeedback?: string) {
-    if (!activeChapterId) return;
+    if (!resolvedActiveChapterId) return;
+    const chapterTitle =
+      chapters.find((c) => c.id === resolvedActiveChapterId)?.title ?? "当前章";
     setBusy(true);
     setError(null);
+    setAgentActivity({
+      reasoning: "",
+      searches: [],
+      label: `出题 · ${chapterTitle}`,
+    });
     try {
       await saveActiveQuestions();
       const res = await fetch("/api/ai/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          chapterId: activeChapterId,
+          chapterId: resolvedActiveChapterId,
           feedback: withFeedback || undefined,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "生成失败");
+      const questions = await consumeAgentStream<Question[]>({
+        response: res,
+        resultKey: "questions",
+        onActivity: (activity) =>
+          setAgentActivity({
+            ...activity,
+            label: `出题 · ${chapterTitle}`,
+          }),
+      });
       setQuestionsByChapter((prev) => ({
         ...prev,
-        [activeChapterId]: (data.questions as Question[]).map((q) => ({
+        [resolvedActiveChapterId]: questions.map((q) => ({
           id: q.id,
           stem: q.stem,
         })),
@@ -219,9 +256,9 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
   }
 
   async function saveActiveQuestions() {
-    if (!activeChapterId) return;
-    const list = questionsByChapter[activeChapterId] ?? [];
-    const res = await fetch(`/api/chapters/${activeChapterId}/questions`, {
+    if (!resolvedActiveChapterId) return;
+    const list = questionsByChapter[resolvedActiveChapterId] ?? [];
+    const res = await fetch(`/api/chapters/${resolvedActiveChapterId}/questions`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ questions: list }),
@@ -230,7 +267,7 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
     if (!res.ok) throw new Error(data.error || "保存小题失败");
     setQuestionsByChapter((prev) => ({
       ...prev,
-      [activeChapterId]: (data.questions as Question[]).map((q) => ({
+      [resolvedActiveChapterId]: (data.questions as Question[]).map((q) => ({
         id: q.id,
         stem: q.stem,
       })),
@@ -330,8 +367,11 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
   }
 
   const activeQuestions = useMemo(
-    () => (activeChapterId ? questionsByChapter[activeChapterId] ?? [] : []),
-    [activeChapterId, questionsByChapter],
+    () =>
+      resolvedActiveChapterId
+        ? questionsByChapter[resolvedActiveChapterId] ?? []
+        : [],
+    [resolvedActiveChapterId, questionsByChapter],
   );
 
   const stepLabel =
@@ -391,10 +431,14 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
         </p>
       ) : null}
 
+      {step === "chapters" || step === "questions" ? (
+        <AgentActivity activity={agentActivity} busy={busy} />
+      ) : null}
+
       {step === "chapters" ? (
         <section className="space-y-4">
           <p className="text-sm text-[var(--ink-muted)]">
-            可直接编辑章节，或输入意见后让模型重新拆分。
+            Agent 会先搜索相关资料再拆分章节；也可直接编辑，或输入意见后重新生成。
           </p>
           <ul className="space-y-4">
             {chapters.map((ch, index) => (
@@ -492,7 +536,7 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
                   type="button"
                   onClick={() => setActiveChapterId(ch.id!)}
                   className={`rounded-sm px-3 py-1.5 text-sm transition ${
-                    activeChapterId === ch.id
+                    resolvedActiveChapterId === ch.id
                       ? "bg-[var(--ink)] text-[var(--paper)]"
                       : "bg-[var(--ink)]/8 text-[var(--ink)]"
                   }`}
@@ -514,12 +558,12 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
                   rows={2}
                   disabled={busy}
                   onChange={(e) => {
-                    if (!activeChapterId) return;
+                    if (!resolvedActiveChapterId) return;
                     const list = [...activeQuestions];
                     list[index] = { ...q, stem: e.target.value };
                     setQuestionsByChapter((prev) => ({
                       ...prev,
-                      [activeChapterId]: list,
+                      [resolvedActiveChapterId]: list,
                     }));
                   }}
                   className="flex-1 resize-y bg-transparent text-sm outline-none"
@@ -529,10 +573,10 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
                   disabled={busy}
                   className="self-start text-xs text-[var(--ink-muted)] hover:text-red-700"
                   onClick={() => {
-                    if (!activeChapterId) return;
+                    if (!resolvedActiveChapterId) return;
                     setQuestionsByChapter((prev) => ({
                       ...prev,
-                      [activeChapterId]: activeQuestions.filter(
+                      [resolvedActiveChapterId]: activeQuestions.filter(
                         (_, i) => i !== index,
                       ),
                     }));
@@ -546,13 +590,13 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
 
           <button
             type="button"
-            disabled={busy || !activeChapterId}
+            disabled={busy || !resolvedActiveChapterId}
             onClick={() => {
-              if (!activeChapterId) return;
+              if (!resolvedActiveChapterId) return;
               setQuestionsByChapter((prev) => ({
                 ...prev,
-                [activeChapterId]: [
-                  ...(prev[activeChapterId] ?? []),
+                [resolvedActiveChapterId]: [
+                  ...(prev[resolvedActiveChapterId] ?? []),
                   { stem: "新小题" },
                 ],
               }));
@@ -574,7 +618,7 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                disabled={busy || !activeChapterId}
+                disabled={busy || !resolvedActiveChapterId}
                 onClick={() =>
                   void generateQuestionsForActive(
                     feedback.trim() || undefined,

@@ -19,19 +19,12 @@ export type ModelOption = {
 
 /** Legacy catalog ids → current V4 catalog ids */
 const LEGACY_MODEL_IDS: Record<string, string> = {
-  "deepseek/deepseek-chat": "deepseek/deepseek-v4-flash",
+  "deepseek/deepseek-chat": "deepseek/deepseek-v4-flash-thinking",
   "deepseek/deepseek-reasoner": "deepseek/deepseek-v4-flash-thinking",
+  "deepseek/deepseek-v4-flash": "deepseek/deepseek-v4-flash-thinking",
 };
 
 export const MODEL_OPTIONS: ModelOption[] = [
-  {
-    id: "deepseek/deepseek-v4-flash",
-    label: "DeepSeek V4 Flash",
-    description: "通用对话，适合拆章节与出题",
-    provider: "deepseek",
-    apiModel: "deepseek-v4-flash",
-    thinking: "disabled",
-  },
   {
     id: "deepseek/deepseek-v4-flash-thinking",
     label: "DeepSeek V4 Flash Thinking",
