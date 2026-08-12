@@ -59,6 +59,10 @@ export async function POST(request: Request) {
         filename: m.filename,
         extractedText: m.extractedText,
       })),
+      {
+        query: `${topic.title}\n${chapter.title}\n${chapter.summary}`,
+        maxTotalChars: 60_000,
+      },
     );
     const { apiModel } = await chooseGenerationModel({
       kind: "questions",

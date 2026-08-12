@@ -1,10 +1,14 @@
 import JSZip from "jszip";
 import { extractText as extractPdfText } from "unpdf";
+import {
+  formatRetrievedChunksForPrompt,
+  retrieveMaterialChunks,
+} from "@/lib/materials/rag";
 
 export const MAX_MATERIAL_BYTES = 12 * 1024 * 1024; // 12MB
 export const MAX_MATERIALS_PER_TOPIC = 8;
-/** Soft cap for text stored / injected into prompts */
-export const MAX_EXTRACTED_CHARS = 80_000;
+/** Soft cap for text stored per material (prompt injection uses RAG selection). */
+export const MAX_EXTRACTED_CHARS = 200_000;
 
 const EXT_MIME: Record<string, string[]> = {
   pdf: ["application/pdf"],
@@ -154,25 +158,18 @@ export async function extractMaterialText(params: {
   return truncate(raw);
 }
 
+/**
+ * Build a materials block for prompts.
+ * Long corpora are chunked and filtered by `query` (topic / chapter / question).
+ */
 export function formatMaterialsForPrompt(
   materials: { filename: string; extractedText: string }[],
-  maxTotalChars = 60_000,
+  options?: { query?: string; maxTotalChars?: number },
 ): string {
   if (materials.length === 0) return "";
 
-  const blocks: string[] = [];
-  let used = 0;
-  for (const m of materials) {
-    const header = `### 文件：${m.filename}\n`;
-    const budget = maxTotalChars - used - header.length;
-    if (budget <= 200) break;
-    const body =
-      m.extractedText.length > budget
-        ? `${m.extractedText.slice(0, budget)}\n…（截断）`
-        : m.extractedText;
-    blocks.push(header + body);
-    used += header.length + body.length;
-  }
-
-  return `\n用户上传的参考资料（请优先依据这些内容划分知识点 / 出题，勿编造资料中未出现的内容）：\n${blocks.join("\n\n")}\n`;
+  const chunks = retrieveMaterialChunks(materials, options?.query ?? "", {
+    maxTotalChars: options?.maxTotalChars ?? 60_000,
+  });
+  return formatRetrievedChunksForPrompt(chunks);
 }

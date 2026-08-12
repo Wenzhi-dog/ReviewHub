@@ -9,6 +9,7 @@ import {
   extractMaterialText,
   isAllowedMaterial,
 } from "@/lib/materials/extract";
+import { fetchUrlMaterial } from "@/lib/materials/fetch-url";
 import { requireOwnerId } from "@/lib/owner";
 
 export const maxDuration = 60;
@@ -41,6 +42,39 @@ export async function GET(
   }
 }
 
+function normalizeUrls(raw: unknown[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const url = item.trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    out.push(url);
+  }
+  return out;
+}
+
+async function parseMaterialsRequest(request: Request): Promise<{
+  files: File[];
+  urls: string[];
+}> {
+  const contentType = request.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    const body = (await request.json()) as { urls?: unknown };
+    const urls = Array.isArray(body.urls) ? normalizeUrls(body.urls) : [];
+    return { files: [], urls };
+  }
+
+  const form = await request.formData();
+  const files = form
+    .getAll("files")
+    .filter((v): v is File => typeof File !== "undefined" && v instanceof File);
+  const urls = normalizeUrls(form.getAll("urls"));
+  return { files, urls };
+}
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ topicId: string }> },
@@ -54,19 +88,19 @@ export async function POST(
     }
 
     const existing = await listMaterials(topicId);
-    const form = await request.formData();
-    const files = form
-      .getAll("files")
-      .filter((v): v is File => typeof File !== "undefined" && v instanceof File);
+    const { files, urls } = await parseMaterialsRequest(request);
 
-    if (files.length === 0) {
-      return NextResponse.json({ error: "请选择要上传的文件" }, { status: 400 });
+    if (files.length === 0 && urls.length === 0) {
+      return NextResponse.json(
+        { error: "请选择要上传的文件或粘贴链接" },
+        { status: 400 },
+      );
     }
 
-    if (existing.length + files.length > MAX_MATERIALS_PER_TOPIC) {
+    if (existing.length + files.length + urls.length > MAX_MATERIALS_PER_TOPIC) {
       return NextResponse.json(
         {
-          error: `每个主题最多上传 ${MAX_MATERIALS_PER_TOPIC} 个文件（已有 ${existing.length} 个）`,
+          error: `每个主题最多 ${MAX_MATERIALS_PER_TOPIC} 份资料（已有 ${existing.length} 个）`,
         },
         { status: 400 },
       );
@@ -123,6 +157,31 @@ export async function POST(
           mimeType: file.type || "application/octet-stream",
           byteSize: file.size,
           extractedText,
+        })
+        .returning();
+      created.push(row);
+    }
+
+    for (const url of urls) {
+      let fetched;
+      try {
+        fetched = await fetchUrlMaterial(url);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "读取失败";
+        return NextResponse.json(
+          { error: `读取链接失败（${url}）：${msg}` },
+          { status: 400 },
+        );
+      }
+
+      const [row] = await db
+        .insert(materials)
+        .values({
+          topicId,
+          filename: fetched.filename,
+          mimeType: fetched.mimeType,
+          byteSize: fetched.byteSize,
+          extractedText: fetched.extractedText,
         })
         .returning();
       created.push(row);

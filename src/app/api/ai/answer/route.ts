@@ -55,7 +55,10 @@ export async function POST(request: Request) {
         filename: m.filename,
         extractedText: m.extractedText,
       })),
-      40_000,
+      {
+        query: `${topic.title}\n${row.chapter.title}\n${row.question.stem}`,
+        maxTotalChars: 40_000,
+      },
     );
 
     // Must use DashScope SSE: non-streaming cannot combine web search + thinking.
