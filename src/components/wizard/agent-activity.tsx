@@ -13,8 +13,11 @@ export function AgentActivity({ activity, busy }: Props) {
 
   if (!activity) return null;
 
+  const sources = activity.sources ?? [];
   const hasContent =
-    activity.reasoning.trim().length > 0 || Boolean(activity.searching);
+    activity.reasoning.trim().length > 0 ||
+    Boolean(activity.searching) ||
+    sources.length > 0;
   if (!hasContent && !busy) return null;
 
   return (
@@ -39,8 +42,44 @@ export function AgentActivity({ activity, busy }: Props) {
         <div className="space-y-4 border-t border-[var(--ink)]/10 px-3 py-3">
           {busy || activity.searching ? (
             <p className="text-xs text-[var(--ink-muted)]">
-              正在通过 Qwen 联网检索相关资料…
+              {activity.searching
+                ? "正在通过 Qwen 联网检索相关资料…"
+                : "正在生成…"}
             </p>
+          ) : null}
+
+          {sources.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs tracking-wide text-[var(--ink-muted)]">
+                检索来源
+                <span className="ml-1 text-[var(--ink-muted)]/80">
+                  · {sources.length} 条
+                </span>
+              </p>
+              <ol className="max-h-40 list-decimal space-y-1.5 overflow-y-auto pl-4 text-xs leading-relaxed text-[var(--ink)]">
+                {sources.map((source) => (
+                  <li key={`${source.index}-${source.url || source.title}`}>
+                    {source.url ? (
+                      <a
+                        href={source.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[var(--accent)] underline-offset-2 hover:underline"
+                      >
+                        {source.title}
+                      </a>
+                    ) : (
+                      <span>{source.title}</span>
+                    )}
+                    {source.siteName ? (
+                      <span className="ml-1 text-[var(--ink-muted)]">
+                        · {source.siteName}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
+            </div>
           ) : null}
 
           {activity.reasoning.trim() ? (

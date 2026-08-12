@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 export function CreateTopicForm() {
   const router = useRouter();
   const [title, setTitle] = useState("");
+  const [enableWebSearch, setEnableWebSearch] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,7 +22,8 @@ export function CreateTopicForm() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "创建失败");
-      router.push(`/create/${data.topic.id}`);
+      const search = enableWebSearch ? "1" : "0";
+      router.push(`/create/${data.topic.id}?search=${search}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "创建失败");
       setLoading(false);
@@ -43,6 +45,30 @@ export function CreateTopicForm() {
           disabled={loading}
         />
       </label>
+
+      <div className="space-y-2">
+        <p className="text-sm tracking-wide text-[var(--ink-muted)]">
+          生成选项
+        </p>
+        <button
+          type="button"
+          disabled={loading}
+          aria-pressed={enableWebSearch}
+          onClick={() => setEnableWebSearch((v) => !v)}
+          className={`rounded-sm border px-3 py-1.5 text-sm transition disabled:opacity-40 ${
+            enableWebSearch
+              ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--paper)]"
+              : "border-[var(--ink)]/30 text-[var(--ink-muted)] hover:border-[var(--ink)]/50"
+          }`}
+        >
+          联网搜索 · {enableWebSearch ? "开" : "关"}
+        </button>
+        <p className="text-xs text-[var(--ink-muted)]">
+          {enableWebSearch
+            ? "拆章节与出题时会联网检索相关资料。"
+            : "拆章节与出题时不联网，仅使用模型知识。"}
+        </p>
+      </div>
 
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
       <button

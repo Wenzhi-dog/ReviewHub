@@ -17,10 +17,13 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       topicId?: string;
       feedback?: string;
+      enableSearch?: boolean;
     };
     if (!body.topicId) {
       return NextResponse.json({ error: "缺少 topicId" }, { status: 400 });
     }
+
+    const enableSearch = body.enableSearch !== false;
 
     const topic = await getOwnedTopic(body.topicId, ownerId);
     if (!topic) {
@@ -43,6 +46,7 @@ export async function POST(request: Request) {
       apiModel,
       schema: chaptersSchema,
       resultKey: "chapters",
+      enableSearch,
       prompt: chaptersPrompt({
         title: topic.title,
         current: existing.map((c) => ({
@@ -50,6 +54,7 @@ export async function POST(request: Request) {
           summary: c.summary,
         })),
         feedback: body.feedback?.trim() || undefined,
+        enableSearch,
       }),
       persist: async (output) => {
         const db = getDb();

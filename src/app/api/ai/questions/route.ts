@@ -21,10 +21,13 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       chapterId?: string;
       feedback?: string;
+      enableSearch?: boolean;
     };
     if (!body.chapterId) {
       return NextResponse.json({ error: "缺少 chapterId" }, { status: 400 });
     }
+
+    const enableSearch = body.enableSearch !== false;
 
     const db = getDb();
     const [chapter] = await db
@@ -59,6 +62,7 @@ export async function POST(request: Request) {
       apiModel,
       schema: questionsSchema,
       resultKey: "questions",
+      enableSearch,
       prompt: questionsPrompt({
         topicTitle: topic.title,
         chapterTitle: chapter.title,
@@ -67,6 +71,7 @@ export async function POST(request: Request) {
           .filter((q) => !q.deletedAt)
           .map((q) => ({ stem: q.stem })),
         feedback: body.feedback?.trim() || undefined,
+        enableSearch,
       }),
       persist: async (output) => {
         await db.delete(questions).where(eq(questions.chapterId, chapter.id));

@@ -12,12 +12,18 @@ import { AgentActivity } from "@/components/wizard/agent-activity";
 type Props = {
   topic: Topic;
   initialChapters: Chapter[];
+  /** Seeded from create form (?search=0|1); defaults to true. */
+  initialEnableWebSearch?: boolean;
 };
 
 type EditableChapter = { id?: string; title: string; summary: string };
 type EditableQuestion = { id?: string; stem: string };
 
-export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
+export function TopicWizard({
+  topic: initialTopic,
+  initialChapters,
+  initialEnableWebSearch = true,
+}: Props) {
   const router = useRouter();
   const [topic, setTopic] = useState(initialTopic);
   const [chapters, setChapters] = useState<EditableChapter[]>(
@@ -39,6 +45,9 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
   const [answerProgress, setAnswerProgress] = useState({ done: 0, total: 0 });
   const [agentActivity, setAgentActivity] = useState<AgentActivityState | null>(
     null,
+  );
+  const [enableWebSearch, setEnableWebSearch] = useState(
+    initialEnableWebSearch,
   );
 
   const step = topic.status;
@@ -84,7 +93,12 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
   async function generateChapters(withFeedback?: string) {
     setBusy(true);
     setError(null);
-    setAgentActivity({ reasoning: "", label: "拆分章节", searching: true });
+    setAgentActivity({
+      reasoning: "",
+      label: "拆分章节",
+      searching: enableWebSearch,
+      sources: [],
+    });
     try {
       const res = await fetch("/api/ai/chapters", {
         method: "POST",
@@ -92,11 +106,13 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
         body: JSON.stringify({
           topicId: topic.id,
           feedback: withFeedback || undefined,
+          enableSearch: enableWebSearch,
         }),
       });
       const rows = await consumeAgentStream<Chapter[]>({
         response: res,
         resultKey: "chapters",
+        enableSearch: enableWebSearch,
         onActivity: (activity) =>
           setAgentActivity({ ...activity, label: "拆分章节" }),
       });
@@ -148,16 +164,21 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
         setAgentActivity({
           reasoning: "",
           label: `出题 · ${ch.title}`,
-          searching: true,
+          searching: enableWebSearch,
+          sources: [],
         });
         const res = await fetch("/api/ai/questions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chapterId: ch.id }),
+          body: JSON.stringify({
+            chapterId: ch.id,
+            enableSearch: enableWebSearch,
+          }),
         });
         const questions = await consumeAgentStream<Question[]>({
           response: res,
           resultKey: "questions",
+          enableSearch: enableWebSearch,
           onActivity: (activity) =>
             setAgentActivity({
               ...activity,
@@ -189,7 +210,8 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
     setAgentActivity({
       reasoning: "",
       label: `出题 · ${chapterTitle}`,
-      searching: true,
+      searching: enableWebSearch,
+      sources: [],
     });
     try {
       await saveActiveQuestions();
@@ -199,11 +221,13 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
         body: JSON.stringify({
           chapterId: resolvedActiveChapterId,
           feedback: withFeedback || undefined,
+          enableSearch: enableWebSearch,
         }),
       });
       const questions = await consumeAgentStream<Question[]>({
         response: res,
         resultKey: "questions",
+        enableSearch: enableWebSearch,
         onActivity: (activity) =>
           setAgentActivity({
             ...activity,
@@ -363,8 +387,30 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
           {topic.title}
         </h1>
         <p className="text-sm text-[var(--ink-muted)]">
-          由 Qwen 自动选择模型并联网检索
+          由 Qwen 自动选择模型
+          {step === "chapters" || step === "questions"
+            ? enableWebSearch
+              ? "并联网检索"
+              : "（未开启联网检索）"
+            : ""}
         </p>
+        {step === "chapters" || step === "questions" ? (
+          <div className="pt-1">
+            <button
+              type="button"
+              disabled={busy}
+              aria-pressed={enableWebSearch}
+              onClick={() => setEnableWebSearch((v) => !v)}
+              className={`rounded-sm border px-3 py-1.5 text-sm transition disabled:opacity-40 ${
+                enableWebSearch
+                  ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--paper)]"
+                  : "border-[var(--ink)]/30 text-[var(--ink-muted)] hover:border-[var(--ink)]/50"
+              }`}
+            >
+              联网搜索 · {enableWebSearch ? "开" : "关"}
+            </button>
+          </div>
+        ) : null}
       </header>
 
       {error ? (
@@ -380,7 +426,9 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
       {step === "chapters" ? (
         <section className="space-y-4">
           <p className="text-sm text-[var(--ink-muted)]">
-            Agent 会联网检索相关资料再拆分章节；也可直接编辑，或输入意见后重新生成。
+            {enableWebSearch
+              ? "Agent 会联网检索相关资料再拆分章节；也可直接编辑，或输入意见后重新生成。"
+              : "Agent 将直接拆分章节（未联网）；也可直接编辑，或输入意见后重新生成。"}
           </p>
           <ul className="space-y-4">
             {chapters.map((ch, index) => (

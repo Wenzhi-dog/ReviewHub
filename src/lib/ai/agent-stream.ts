@@ -1,16 +1,16 @@
 import {
   createUIMessageStream,
   createUIMessageStreamResponse,
-  streamText,
-  toUIMessageStream,
   type UIMessage,
 } from "ai";
 import type { z } from "zod";
-import { getModelRequest } from "@/lib/ai/provider";
+import { streamDashScopeGeneration } from "@/lib/ai/dashscope-stream";
+import type { SearchSource } from "@/lib/ai/search-source";
 
 export type AgentDataParts = {
   chapters: unknown;
   questions: unknown;
+  sources: SearchSource[];
   error: { message: string };
 };
 
@@ -23,49 +23,76 @@ type CreateAgentStreamOptions<TSchema extends z.ZodType> = {
   schema: TSchema;
   /** Custom data part name written after persistence */
   resultKey: "chapters" | "questions";
+  /** Enable Qwen built-in web search + source refs. Defaults to true. */
+  enableSearch?: boolean;
   persist: (output: z.infer<TSchema>) => Promise<unknown>;
 };
 
 /**
- * Run a thinking + built-in web-search agent and stream UI message parts.
+ * Run a thinking agent (optional built-in web search) and stream UI message parts.
+ * Uses DashScope native generation so search_info sources can be returned.
  * Persists structured output when finished, then emits a data-* part.
  *
- * Does NOT use Output.json()/response_format: DashScope rejects json_object
- * together with enable_search (search agent). We parse JSON from free text.
+ * Does NOT use response_format/json_object: DashScope rejects it together
+ * with enable_search. We parse JSON from free text.
  */
 export function createAgentStreamResponse<TSchema extends z.ZodType>(
   options: CreateAgentStreamOptions<TSchema>,
 ): Response {
-  const { model } = getModelRequest(options.apiModel, {
-    enableSearch: true,
-    enableThinking: true,
-  });
+  const enableSearch = options.enableSearch ?? true;
 
   const stream = createUIMessageStream<AgentUIMessage>({
     execute: async ({ writer }) => {
+      const reasoningId = "reasoning";
+      const textId = "text";
+      let startedReasoning = false;
+      let startedText = false;
+      let text = "";
+      let sourcesEmitted = false;
+
       try {
-        const result = streamText({
-          model,
+        for await (const chunk of streamDashScopeGeneration({
+          apiModel: options.apiModel,
           prompt: options.prompt,
-        });
+          enableSearch,
+          enableThinking: true,
+        })) {
+          if (chunk.sources?.length && !sourcesEmitted) {
+            writer.write({ type: "data-sources", data: chunk.sources });
+            sourcesEmitted = true;
+          }
 
-        writer.merge(
-          toUIMessageStream({
-            stream: result.stream,
-            sendReasoning: true,
-            onError: (error) =>
-              error instanceof Error ? error.message : "生成失败",
-          }),
-        );
+          if (chunk.reasoningDelta) {
+            if (!startedReasoning) {
+              writer.write({ type: "reasoning-start", id: reasoningId });
+              startedReasoning = true;
+            }
+            writer.write({
+              type: "reasoning-delta",
+              id: reasoningId,
+              delta: chunk.reasoningDelta,
+            });
+          }
 
-        let text: string;
-        try {
-          text = await result.text;
-        } catch (e) {
-          const message =
-            e instanceof Error ? e.message : "模型流式输出失败";
-          writer.write({ type: "data-error", data: { message } });
-          return;
+          if (chunk.textDelta) {
+            if (!startedText) {
+              writer.write({ type: "text-start", id: textId });
+              startedText = true;
+            }
+            text += chunk.textDelta;
+            writer.write({
+              type: "text-delta",
+              id: textId,
+              delta: chunk.textDelta,
+            });
+          }
+        }
+
+        if (startedReasoning) {
+          writer.write({ type: "reasoning-end", id: reasoningId });
+        }
+        if (startedText) {
+          writer.write({ type: "text-end", id: textId });
         }
 
         let raw: unknown;

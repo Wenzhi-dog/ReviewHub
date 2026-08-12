@@ -23,7 +23,10 @@ export type GetModelRequestOptions = {
 };
 
 /**
- * Resolve a concrete Qwen API model.
+ * Resolve a concrete Qwen API model (OpenAI-compatible Chat Completions).
+ * Used for answer generation and model routing — not for agent search citations
+ * (compatible-mode cannot return search_info; see dashscope-stream.ts).
+ *
  * DashScope extras (enable_search / enable_thinking) are injected via
  * transformRequestBody because openai-compatible strips unknown providerOptions.
  */
