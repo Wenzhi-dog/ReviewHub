@@ -1,6 +1,12 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { chapters, questions, topics, type Topic } from "@/lib/db/schema";
+import {
+  chapters,
+  materials,
+  questions,
+  topics,
+  type Topic,
+} from "@/lib/db/schema";
 
 export async function getOwnedTopic(
   topicId: string,
@@ -65,4 +71,13 @@ export async function touchTopic(topicId: string) {
     .update(topics)
     .set({ updatedAt: new Date() })
     .where(eq(topics.id, topicId));
+}
+
+export async function listMaterials(topicId: string) {
+  const db = getDb();
+  return db
+    .select()
+    .from(materials)
+    .where(eq(materials.topicId, topicId))
+    .orderBy(asc(materials.createdAt));
 }

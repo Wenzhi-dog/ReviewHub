@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { TopicWizard } from "@/components/wizard/topic-wizard";
-import { getOwnedTopic, listChapters } from "@/lib/db/queries";
+import { getOwnedTopic, listChapters, listMaterials } from "@/lib/db/queries";
 import { requireOwnerId } from "@/lib/owner";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,10 @@ export default async function CreateWizardPage({
   if (!topic) notFound();
   if (topic.status === "ready") redirect(`/t/${topic.id}`);
 
-  const chapters = await listChapters(topic.id);
+  const [chapters, materialRows] = await Promise.all([
+    listChapters(topic.id),
+    listMaterials(topic.id),
+  ]);
   const initialEnableWebSearch = search !== "0";
 
   return (
@@ -27,6 +30,11 @@ export default async function CreateWizardPage({
       topic={topic}
       initialChapters={chapters}
       initialEnableWebSearch={initialEnableWebSearch}
+      initialMaterials={materialRows.map((m) => ({
+        id: m.id,
+        filename: m.filename,
+        charCount: m.extractedText.length,
+      }))}
     />
   );
 }

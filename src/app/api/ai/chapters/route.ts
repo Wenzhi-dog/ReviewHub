@@ -6,7 +6,13 @@ import { chaptersSchema } from "@/lib/ai/schemas";
 import { chooseGenerationModel } from "@/lib/ai/select-model";
 import { getDb } from "@/lib/db";
 import { chapters } from "@/lib/db/schema";
-import { getOwnedTopic, listChapters, touchTopic } from "@/lib/db/queries";
+import {
+  getOwnedTopic,
+  listChapters,
+  listMaterials,
+  touchTopic,
+} from "@/lib/db/queries";
+import { formatMaterialsForPrompt } from "@/lib/materials/extract";
 import { requireOwnerId } from "@/lib/owner";
 
 export const maxDuration = 120;
@@ -37,6 +43,13 @@ export async function POST(request: Request) {
     }
 
     const existing = await listChapters(topic.id);
+    const materialRows = await listMaterials(topic.id);
+    const materialsBlock = formatMaterialsForPrompt(
+      materialRows.map((m) => ({
+        filename: m.filename,
+        extractedText: m.extractedText,
+      })),
+    );
     const { apiModel } = await chooseGenerationModel({
       kind: "chapters",
       topicTitle: topic.title,
@@ -55,6 +68,7 @@ export async function POST(request: Request) {
         })),
         feedback: body.feedback?.trim() || undefined,
         enableSearch,
+        materialsBlock: materialsBlock || undefined,
       }),
       persist: async (output) => {
         const db = getDb();

@@ -8,9 +8,11 @@ import { getDb } from "@/lib/db";
 import { chapters, questions } from "@/lib/db/schema";
 import {
   getOwnedTopic,
+  listMaterials,
   listQuestions,
   touchTopic,
 } from "@/lib/db/queries";
+import { formatMaterialsForPrompt } from "@/lib/materials/extract";
 import { requireOwnerId } from "@/lib/owner";
 
 export const maxDuration = 120;
@@ -51,6 +53,13 @@ export async function POST(request: Request) {
     }
 
     const existing = await listQuestions(chapter.id, true);
+    const materialRows = await listMaterials(topic.id);
+    const materialsBlock = formatMaterialsForPrompt(
+      materialRows.map((m) => ({
+        filename: m.filename,
+        extractedText: m.extractedText,
+      })),
+    );
     const { apiModel } = await chooseGenerationModel({
       kind: "questions",
       topicTitle: topic.title,
@@ -72,6 +81,7 @@ export async function POST(request: Request) {
           .map((q) => ({ stem: q.stem })),
         feedback: body.feedback?.trim() || undefined,
         enableSearch,
+        materialsBlock: materialsBlock || undefined,
       }),
       persist: async (output) => {
         await db.delete(questions).where(eq(questions.chapterId, chapter.id));

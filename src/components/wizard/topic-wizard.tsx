@@ -9,11 +9,18 @@ import {
 import type { Chapter, Question, Topic } from "@/lib/db/schema";
 import { AgentActivity } from "@/components/wizard/agent-activity";
 
+type MaterialSummary = {
+  id: string;
+  filename: string;
+  charCount: number;
+};
+
 type Props = {
   topic: Topic;
   initialChapters: Chapter[];
   /** Seeded from create form (?search=0|1); defaults to true. */
   initialEnableWebSearch?: boolean;
+  initialMaterials?: MaterialSummary[];
 };
 
 type EditableChapter = { id?: string; title: string; summary: string };
@@ -23,9 +30,11 @@ export function TopicWizard({
   topic: initialTopic,
   initialChapters,
   initialEnableWebSearch = true,
+  initialMaterials = [],
 }: Props) {
   const router = useRouter();
   const [topic, setTopic] = useState(initialTopic);
+  const materials = initialMaterials;
   const [chapters, setChapters] = useState<EditableChapter[]>(
     initialChapters.map((c) => ({
       id: c.id,
@@ -312,20 +321,30 @@ export function TopicWizard({
       }
 
       setAnswerProgress({ done: 0, total: freshIds.length });
-      const ANSWER_CONCURRENCY = 5;
+      const ANSWER_CONCURRENCY = 3;
       let done = 0;
       let nextIndex = 0;
 
       async function generateOne(qid: string) {
-        const res = await fetch("/api/ai/answer", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ questionId: qid }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "生成答案失败");
-        done += 1;
-        setAnswerProgress({ done, total: freshIds.length });
+        let lastError: Error | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const res = await fetch("/api/ai/answer", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ questionId: qid }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            done += 1;
+            setAnswerProgress({ done, total: freshIds.length });
+            return;
+          }
+          lastError = new Error(data.error || "生成答案失败");
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+          }
+        }
+        throw lastError ?? new Error("生成答案失败");
       }
 
       async function worker() {
@@ -393,7 +412,22 @@ export function TopicWizard({
               ? "并联网检索"
               : "（未开启联网检索）"
             : ""}
+          {materials.length > 0
+            ? ` · 已参考 ${materials.length} 份上传资料`
+            : ""}
         </p>
+        {materials.length > 0 ? (
+          <ul className="space-y-1 text-xs text-[var(--ink-muted)]">
+            {materials.map((m) => (
+              <li key={m.id} className="truncate">
+                {m.filename}
+                {m.charCount > 0
+                  ? ` · 已提取约 ${m.charCount.toLocaleString()} 字`
+                  : ""}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {step === "chapters" || step === "questions" ? (
           <div className="pt-1">
             <button
@@ -426,9 +460,13 @@ export function TopicWizard({
       {step === "chapters" ? (
         <section className="space-y-4">
           <p className="text-sm text-[var(--ink-muted)]">
-            {enableWebSearch
-              ? "Agent 会联网检索相关资料再拆分章节；也可直接编辑，或输入意见后重新生成。"
-              : "Agent 将直接拆分章节（未联网）；也可直接编辑，或输入意见后重新生成。"}
+            {materials.length > 0
+              ? enableWebSearch
+                ? "Agent 会优先依据上传资料拆分章节，并联网补充；也可直接编辑，或输入意见后重新生成。"
+                : "Agent 会依据上传资料拆分章节（未联网）；也可直接编辑，或输入意见后重新生成。"
+              : enableWebSearch
+                ? "Agent 会联网检索相关资料再拆分章节；也可直接编辑，或输入意见后重新生成。"
+                : "Agent 将直接拆分章节（未联网）；也可直接编辑，或输入意见后重新生成。"}
           </p>
           <ul className="space-y-4">
             {chapters.map((ch, index) => (
@@ -634,7 +672,7 @@ export function TopicWizard({
       {step === "answers" ? (
         <section className="space-y-4">
           <p className="text-sm text-[var(--ink-muted)]">
-            正在并行生成答案…
+            正在并行生成答案；每题由模型自行判断是否需要联网检索。
           </p>
           <div className="h-2 overflow-hidden rounded-full bg-[var(--ink)]/10">
             <div

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { chapters, questions } from "@/lib/db/schema";
 import { getOwnedTopic, listQuestions, touchTopic } from "@/lib/db/queries";
@@ -7,19 +7,16 @@ import { requireOwnerId } from "@/lib/owner";
 
 async function assertChapterOwned(chapterId: string, ownerId: string) {
   const db = getDb();
-  const [row] = await db
-    .select({
-      chapter: chapters,
-      topicOwnerId: chapters.topicId,
-    })
+  const [chapter] = await db
+    .select()
     .from(chapters)
     .where(eq(chapters.id, chapterId))
     .limit(1);
 
-  if (!row) return null;
-  const topic = await getOwnedTopic(row.chapter.topicId, ownerId);
+  if (!chapter) return null;
+  const topic = await getOwnedTopic(chapter.topicId, ownerId);
   if (!topic) return null;
-  return { chapter: row.chapter, topic };
+  return { chapter, topic };
 }
 
 export async function GET(

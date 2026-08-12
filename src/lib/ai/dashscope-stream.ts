@@ -52,6 +52,9 @@ type StreamDashScopeOptions = {
 /**
  * Stream DashScope native generation with optional web search + thinking.
  * OpenAI-compatible Chat Completions cannot return search_info; native API can.
+ *
+ * Note: DashScope rejects non-streaming + enable_search + enable_thinking together.
+ * Always use this SSE path when both search and thinking are needed.
  */
 export async function* streamDashScopeGeneration(
   options: StreamDashScopeOptions,
@@ -239,4 +242,17 @@ function parseDashScopeError(body: string): string | undefined {
   } catch {
     return body.slice(0, 200);
   }
+}
+
+/** Collect full assistant text from a DashScope SSE stream (search + thinking OK). */
+export async function generateDashScopeText(
+  options: StreamDashScopeOptions,
+): Promise<{ text: string; sources: SearchSource[] }> {
+  let text = "";
+  const sources: SearchSource[] = [];
+  for await (const chunk of streamDashScopeGeneration(options)) {
+    if (chunk.sources?.length) sources.push(...chunk.sources);
+    if (chunk.textDelta) text += chunk.textDelta;
+  }
+  return { text, sources };
 }

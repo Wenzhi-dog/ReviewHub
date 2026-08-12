@@ -55,6 +55,21 @@ export const questions = pgTable("questions", {
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
+export const materials = pgTable("materials", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  topicId: uuid("topic_id")
+    .notNull()
+    .references(() => topics.id, { onDelete: "cascade" }),
+  filename: text("filename").notNull(),
+  mimeType: text("mime_type").notNull().default("application/octet-stream"),
+  byteSize: integer("byte_size").notNull().default(0),
+  extractedText: text("extracted_text").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 export type Topic = typeof topics.$inferSelect;
 export type Chapter = typeof chapters.$inferSelect;
 export type Question = typeof questions.$inferSelect;
+export type Material = typeof materials.$inferSelect;

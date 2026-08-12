@@ -1,7 +1,6 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import type { QwenApiModel } from "@/lib/ai/models";
-import { QWEN_MODELS } from "@/lib/ai/models";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -24,8 +23,9 @@ export type GetModelRequestOptions = {
 
 /**
  * Resolve a concrete Qwen API model (OpenAI-compatible Chat Completions).
- * Used for answer generation and model routing — not for agent search citations
- * (compatible-mode cannot return search_info; see dashscope-stream.ts).
+ * Used for model routing / non-search calls.
+ * Answers that need search + thinking must use dashscope-stream (SSE):
+ * non-streaming compatible-mode rejects that combination.
  *
  * DashScope extras (enable_search / enable_thinking) are injected via
  * transformRequestBody because openai-compatible strips unknown providerOptions.
@@ -56,12 +56,4 @@ export function getModelRequest(
   });
 
   return { model: qwen.chatModel(apiModel) };
-}
-
-/** Shortcut for answer generation (always flash, no search). */
-export function getAnswerModelRequest(): ModelRequestConfig {
-  return getModelRequest(QWEN_MODELS.answer, {
-    enableSearch: false,
-    enableThinking: true,
-  });
 }
