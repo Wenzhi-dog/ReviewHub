@@ -1,6 +1,7 @@
-import { createDeepSeek } from "@ai-sdk/deepseek";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
-import { resolveModelOption, type AiProviderId } from "@/lib/ai/models";
+import type { QwenApiModel } from "@/lib/ai/models";
+import { QWEN_MODELS } from "@/lib/ai/models";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -10,55 +11,54 @@ function requireEnv(name: string): string {
   return value.trim();
 }
 
-const providerFactories: Record<
-  AiProviderId,
-  (apiModel: string) => LanguageModel
-> = {
-  deepseek: (apiModel) => {
-    const deepseek = createDeepSeek({
-      apiKey: requireEnv("DEEPSEEK_API_KEY"),
-    });
-    // Official provider uses json_object (not json_schema) for structured output.
-    return deepseek.chat(apiModel);
-  },
-  // Future: openai, anthropic, etc.
-};
-
 export type ModelRequestConfig = {
   model: LanguageModel;
-  providerOptions?: {
-    deepseek: {
-      thinking: { type: "enabled" | "disabled" };
-      reasoningEffort?: "high";
-    };
-  };
 };
 
-/** Resolve model + DeepSeek thinking options from a catalog id. */
+export type GetModelRequestOptions = {
+  /** Enable Qwen built-in web search (chapters / questions). */
+  enableSearch?: boolean;
+  /** Enable thinking/reasoning stream. Defaults to true. */
+  enableThinking?: boolean;
+};
+
+/**
+ * Resolve a concrete Qwen API model.
+ * DashScope extras (enable_search / enable_thinking) are injected via
+ * transformRequestBody because openai-compatible strips unknown providerOptions.
+ */
 export function getModelRequest(
-  modelId: string | null | undefined,
+  apiModel: QwenApiModel | string,
+  options: GetModelRequestOptions = {},
 ): ModelRequestConfig {
-  const option = resolveModelOption(modelId);
-  const factory = providerFactories[option.provider];
-  if (!factory) {
-    throw new Error(`未支持的模型提供商：${option.provider}`);
-  }
+  const enableSearch = options.enableSearch ?? false;
+  const enableThinking = options.enableThinking ?? true;
 
-  const model = factory(option.apiModel);
+  const qwen = createOpenAICompatible({
+    name: "qwen",
+    apiKey: requireEnv("DASHSCOPE_API_KEY"),
+    baseURL:
+      process.env.DASHSCOPE_BASE_URL?.trim() ||
+      "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    transformRequestBody: (body) => ({
+      ...body,
+      enable_thinking: enableThinking,
+      ...(enableSearch
+        ? {
+            enable_search: true,
+            search_options: { search_strategy: "agent" },
+          }
+        : {}),
+    }),
+  });
 
-  if (option.provider !== "deepseek") {
-    return { model };
-  }
+  return { model: qwen.chatModel(apiModel) };
+}
 
-  return {
-    model,
-    providerOptions: {
-      deepseek: {
-        thinking: { type: option.thinking },
-        ...(option.thinking === "enabled"
-          ? { reasoningEffort: "high" as const }
-          : {}),
-      },
-    },
-  };
+/** Shortcut for answer generation (always flash, no search). */
+export function getAnswerModelRequest(): ModelRequestConfig {
+  return getModelRequest(QWEN_MODELS.answer, {
+    enableSearch: false,
+    enableThinking: true,
+  });
 }

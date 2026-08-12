@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import {
-  DEFAULT_MODEL_ID,
-  isValidModelId,
-  resolveModelOption,
-} from "@/lib/ai/models";
+import { DEFAULT_MODEL_ID } from "@/lib/ai/models";
 import { getDb } from "@/lib/db";
 import { topics } from "@/lib/db/schema";
 import { requireOwnerId } from "@/lib/owner";
@@ -29,16 +25,11 @@ export async function POST(request: Request) {
     const ownerId = await requireOwnerId();
     const body = (await request.json()) as {
       title?: string;
-      modelId?: string;
     };
     const title = body.title?.trim();
     if (!title) {
       return NextResponse.json({ error: "请输入主题" }, { status: 400 });
     }
-
-    const modelId = isValidModelId(body.modelId)
-      ? resolveModelOption(body.modelId).id
-      : DEFAULT_MODEL_ID;
 
     const db = getDb();
     const [topic] = await db
@@ -46,7 +37,7 @@ export async function POST(request: Request) {
       .values({
         ownerId,
         title,
-        modelId,
+        modelId: DEFAULT_MODEL_ID,
         status: "chapters",
       })
       .returning();

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
-import { isValidModelId, resolveModelOption } from "@/lib/ai/models";
 import { getDb } from "@/lib/db";
 import { topics, type TopicStatus } from "@/lib/db/schema";
 import { getOwnedTopic } from "@/lib/db/queries";
@@ -41,13 +40,11 @@ export async function PATCH(
     const body = (await request.json()) as {
       title?: string;
       status?: TopicStatus;
-      modelId?: string;
     };
 
     const updates: Partial<{
       title: string;
       status: TopicStatus;
-      modelId: string;
       updatedAt: Date;
     }> = { updatedAt: new Date() };
     if (typeof body.title === "string" && body.title.trim()) {
@@ -55,9 +52,6 @@ export async function PATCH(
     }
     if (body.status && statuses.includes(body.status)) {
       updates.status = body.status;
-    }
-    if (isValidModelId(body.modelId)) {
-      updates.modelId = resolveModelOption(body.modelId).id;
     }
 
     const db = getDb();

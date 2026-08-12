@@ -11,8 +11,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@ai-sdk/deepseek": "^3.0.14",
-    "@ai-sdk/openai": "^4.0.21",
+    "@ai-sdk/openai-compatible": "^3.0.29",
     "@neondatabase/serverless": "^1.1.0",
     "ai": "^7.0.37",
     "drizzle-orm": "^0.45.2",

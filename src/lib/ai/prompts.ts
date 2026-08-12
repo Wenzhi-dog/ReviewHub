@@ -18,7 +18,7 @@ export function chaptersPrompt(params: {
 ${currentBlock}${feedbackBlock}
 
 工作方式：
-1. 先用 webSearch 工具检索该主题的权威文档、教程、大纲或资料（可多角度搜索 1–3 次）。
+1. 先联网搜索该主题的权威文档、教程、大纲或资料（可多角度检索）。
 2. 基于检索结果思考如何划分复习章节，避免凭空编造冷门错误知识点。
 3. 最终以 JSON 对象返回，格式示例：
 {"chapters":[{"title":"章节标题","summary":"一两句概要"}]}
@@ -50,7 +50,7 @@ export function questionsPrompt(params: {
 ${currentBlock}${feedbackBlock}
 
 工作方式：
-1. 先用 webSearch 工具检索与本章相关的资料、常见考点或例题线索（可搜索 1–3 次）。
+1. 先联网搜索与本章相关的资料、常见考点或例题线索。
 2. 基于检索结果思考出题角度，题干应可检验理解而非死记硬背。
 3. 最终以 JSON 对象返回，格式示例：
 {"questions":[{"stem":"题干内容"}]}

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createAgentStreamResponse } from "@/lib/ai/agent-stream";
 import { chaptersPrompt } from "@/lib/ai/prompts";
 import { chaptersSchema } from "@/lib/ai/schemas";
+import { chooseGenerationModel } from "@/lib/ai/select-model";
 import { getDb } from "@/lib/db";
 import { chapters } from "@/lib/db/schema";
 import { getOwnedTopic, listChapters, touchTopic } from "@/lib/db/queries";
@@ -33,9 +34,13 @@ export async function POST(request: Request) {
     }
 
     const existing = await listChapters(topic.id);
+    const { apiModel } = await chooseGenerationModel({
+      kind: "chapters",
+      topicTitle: topic.title,
+    });
 
     return createAgentStreamResponse({
-      modelId: topic.modelId,
+      apiModel,
       schema: chaptersSchema,
       resultKey: "chapters",
       prompt: chaptersPrompt({

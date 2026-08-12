@@ -2,15 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  DEFAULT_MODEL_ID,
-  MODEL_OPTIONS,
-} from "@/lib/ai/models";
 
 export function CreateTopicForm() {
   const router = useRouter();
   const [title, setTitle] = useState("");
-  const [modelId, setModelId] = useState(DEFAULT_MODEL_ID);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,7 +17,7 @@ export function CreateTopicForm() {
       const res = await fetch("/api/topics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, modelId }),
+        body: JSON.stringify({ title }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "创建失败");
@@ -48,39 +43,6 @@ export function CreateTopicForm() {
           disabled={loading}
         />
       </label>
-
-      <fieldset className="space-y-3">
-        <legend className="text-sm tracking-wide text-[var(--ink-muted)]">
-          模型
-        </legend>
-        <div className="flex flex-wrap gap-2">
-          {MODEL_OPTIONS.map((option) => {
-            const active = modelId === option.id;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                disabled={loading}
-                onClick={() => setModelId(option.id)}
-                className={`rounded-sm px-3 py-2 text-left text-sm transition ${
-                  active
-                    ? "bg-[var(--ink)] text-[var(--paper)]"
-                    : "bg-[var(--ink)]/8 text-[var(--ink)] hover:bg-[var(--ink)]/12"
-                }`}
-              >
-                <span className="block font-medium">{option.label}</span>
-                <span
-                  className={`mt-0.5 block text-xs ${
-                    active ? "text-[var(--paper)]/70" : "text-[var(--ink-muted)]"
-                  }`}
-                >
-                  {option.description}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </fieldset>
 
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
       <button

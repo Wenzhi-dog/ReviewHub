@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createAgentStreamResponse } from "@/lib/ai/agent-stream";
 import { questionsPrompt } from "@/lib/ai/prompts";
 import { questionsSchema } from "@/lib/ai/schemas";
+import { chooseGenerationModel } from "@/lib/ai/select-model";
 import { getDb } from "@/lib/db";
 import { chapters, questions } from "@/lib/db/schema";
 import {
@@ -47,9 +48,15 @@ export async function POST(request: Request) {
     }
 
     const existing = await listQuestions(chapter.id, true);
+    const { apiModel } = await chooseGenerationModel({
+      kind: "questions",
+      topicTitle: topic.title,
+      chapterTitle: chapter.title,
+      chapterSummary: chapter.summary,
+    });
 
     return createAgentStreamResponse({
-      modelId: topic.modelId,
+      apiModel,
       schema: questionsSchema,
       resultKey: "questions",
       prompt: questionsPrompt({

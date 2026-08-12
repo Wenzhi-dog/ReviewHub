@@ -19,10 +19,10 @@ export const topics = pgTable("topics", {
   id: uuid("id").defaultRandom().primaryKey(),
   ownerId: text("owner_id").notNull(),
   title: text("title").notNull(),
-  /** Catalog id from MODEL_OPTIONS, e.g. deepseek/deepseek-v4-flash-thinking */
+  /** Legacy field; generation auto-selects Qwen tiers and ignores user choice. */
   modelId: text("model_id")
     .notNull()
-    .default("deepseek/deepseek-v4-flash-thinking"),
+    .default("qwen3.7-flash"),
   status: text("status").$type<TopicStatus>().notNull().default("chapters"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()

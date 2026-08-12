@@ -3,12 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  getModelLabel,
-  MODEL_OPTIONS,
-  isValidModelId,
-  resolveModelOption,
-} from "@/lib/ai/models";
-import {
   consumeAgentStream,
   type AgentActivityState,
 } from "@/lib/ai/consume-agent-stream";
@@ -26,9 +20,6 @@ type EditableQuestion = { id?: string; stem: string };
 export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
   const router = useRouter();
   const [topic, setTopic] = useState(initialTopic);
-  const [modelId, setModelId] = useState(
-    resolveModelOption(initialTopic.modelId).id,
-  );
   const [chapters, setChapters] = useState<EditableChapter[]>(
     initialChapters.map((c) => ({
       id: c.id,
@@ -93,7 +84,7 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
   async function generateChapters(withFeedback?: string) {
     setBusy(true);
     setError(null);
-    setAgentActivity({ reasoning: "", searches: [], label: "拆分章节" });
+    setAgentActivity({ reasoning: "", label: "拆分章节", searching: true });
     try {
       const res = await fetch("/api/ai/chapters", {
         method: "POST",
@@ -119,27 +110,6 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
       setFeedback("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "生成失败");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function changeModel(nextModelId: string) {
-    if (!isValidModelId(nextModelId) || nextModelId === modelId || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/topics/${topic.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelId: nextModelId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "切换模型失败");
-      setTopic(data.topic as Topic);
-      setModelId(nextModelId);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "切换模型失败");
     } finally {
       setBusy(false);
     }
@@ -177,8 +147,8 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
       for (const ch of rows) {
         setAgentActivity({
           reasoning: "",
-          searches: [],
           label: `出题 · ${ch.title}`,
+          searching: true,
         });
         const res = await fetch("/api/ai/questions", {
           method: "POST",
@@ -218,8 +188,8 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
     setError(null);
     setAgentActivity({
       reasoning: "",
-      searches: [],
       label: `出题 · ${chapterTitle}`,
+      searching: true,
     });
     try {
       await saveActiveQuestions();
@@ -392,37 +362,9 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
         <h1 className="font-[family-name:var(--font-display)] text-3xl text-[var(--ink)] md:text-4xl">
           {topic.title}
         </h1>
-        {step === "chapters" || step === "questions" ? (
-          <div className="space-y-2">
-            <p className="text-xs tracking-wide text-[var(--ink-muted)]">
-              当前模型 · {getModelLabel(modelId)}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {MODEL_OPTIONS.map((option) => {
-                const active = modelId === option.id;
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void changeModel(option.id)}
-                    className={`rounded-sm px-3 py-1.5 text-sm transition ${
-                      active
-                        ? "bg-[var(--ink)] text-[var(--paper)]"
-                        : "bg-[var(--ink)]/8 text-[var(--ink)] hover:bg-[var(--ink)]/12"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          <p className="text-sm text-[var(--ink-muted)]">
-            模型 · {getModelLabel(modelId)}
-          </p>
-        )}
+        <p className="text-sm text-[var(--ink-muted)]">
+          由 Qwen 自动选择模型并联网检索
+        </p>
       </header>
 
       {error ? (
@@ -438,7 +380,7 @@ export function TopicWizard({ topic: initialTopic, initialChapters }: Props) {
       {step === "chapters" ? (
         <section className="space-y-4">
           <p className="text-sm text-[var(--ink-muted)]">
-            Agent 会先搜索相关资料再拆分章节；也可直接编辑，或输入意见后重新生成。
+            Agent 会联网检索相关资料再拆分章节；也可直接编辑，或输入意见后重新生成。
           </p>
           <ul className="space-y-4">
             {chapters.map((ch, index) => (

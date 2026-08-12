@@ -1,15 +1,12 @@
 import {
   createUIMessageStream,
   createUIMessageStreamResponse,
-  Output,
-  stepCountIs,
   streamText,
   toUIMessageStream,
   type UIMessage,
 } from "ai";
 import type { z } from "zod";
 import { getModelRequest } from "@/lib/ai/provider";
-import { agentTools } from "@/lib/ai/tools";
 
 export type AgentDataParts = {
   chapters: unknown;
@@ -20,7 +17,8 @@ export type AgentDataParts = {
 export type AgentUIMessage = UIMessage<never, AgentDataParts>;
 
 type CreateAgentStreamOptions<TSchema extends z.ZodType> = {
-  modelId: string | null | undefined;
+  /** Concrete Qwen API model id */
+  apiModel: string;
   prompt: string;
   schema: TSchema;
   /** Custom data part name written after persistence */
@@ -29,44 +27,59 @@ type CreateAgentStreamOptions<TSchema extends z.ZodType> = {
 };
 
 /**
- * Run a search+thinking agent and stream UI message parts.
- * Persists structured output when the loop finishes, then emits a data-* part.
+ * Run a thinking + built-in web-search agent and stream UI message parts.
+ * Persists structured output when finished, then emits a data-* part.
  *
- * Uses Output.json() (not Output.object) because DeepSeek lacks native
- * json_schema support; Zod validates the result after the stream completes.
+ * Does NOT use Output.json()/response_format: DashScope rejects json_object
+ * together with enable_search (search agent). We parse JSON from free text.
  */
 export function createAgentStreamResponse<TSchema extends z.ZodType>(
   options: CreateAgentStreamOptions<TSchema>,
 ): Response {
-  const { model, providerOptions } = getModelRequest(options.modelId);
+  const { model } = getModelRequest(options.apiModel, {
+    enableSearch: true,
+    enableThinking: true,
+  });
 
   const stream = createUIMessageStream<AgentUIMessage>({
     execute: async ({ writer }) => {
       try {
         const result = streamText({
           model,
-          providerOptions,
-          tools: agentTools,
-          stopWhen: stepCountIs(8),
-          output: Output.json(),
           prompt: options.prompt,
         });
 
         writer.merge(
           toUIMessageStream({
             stream: result.stream,
-            tools: agentTools,
             sendReasoning: true,
             onError: (error) =>
-              error instanceof Error ? error.message : "工具执行失败",
+              error instanceof Error ? error.message : "生成失败",
           }),
         );
 
-        const raw = await result.output;
-        const parsed = options.schema.safeParse(
-          raw ?? extractJsonObject(await result.text),
-        );
+        let text: string;
+        try {
+          text = await result.text;
+        } catch (e) {
+          const message =
+            e instanceof Error ? e.message : "模型流式输出失败";
+          writer.write({ type: "data-error", data: { message } });
+          return;
+        }
 
+        let raw: unknown;
+        try {
+          raw = extractJsonObject(text);
+        } catch {
+          writer.write({
+            type: "data-error",
+            data: { message: "模型未返回有效 JSON" },
+          });
+          return;
+        }
+
+        const parsed = options.schema.safeParse(raw);
         if (!parsed.success) {
           writer.write({
             type: "data-error",
@@ -95,6 +108,10 @@ export function createAgentStreamResponse<TSchema extends z.ZodType>(
 
 function extractJsonObject(text: string): unknown {
   const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error("空响应");
+  }
+
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = fenced?.[1]?.trim() ?? trimmed;
   try {
