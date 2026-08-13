@@ -132,12 +132,12 @@ export function CreateTopicForm() {
     <form onSubmit={onSubmit} className="mx-auto max-w-xl space-y-6">
       <label className="block space-y-2">
         <span className="text-sm tracking-wide text-[var(--ink-muted)]">
-          复习主题
+          面试主题
         </span>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="例如：操作系统进程调度"
+          placeholder="例如：后端面试 · 进程与并发"
           className="w-full border-b border-[var(--ink)]/25 bg-transparent px-0 py-3 text-xl outline-none transition focus:border-[var(--accent)]"
           required
           disabled={loading}

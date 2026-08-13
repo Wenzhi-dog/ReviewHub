@@ -12,7 +12,7 @@ export default async function HomePage() {
     const ownerId = await requireOwnerId();
     topics = await listReadyTopics(ownerId);
   } catch (e) {
-    error = e instanceof Error ? e.message : "无法加载复习内容";
+    error = e instanceof Error ? e.message : "无法加载面试内容";
   }
 
   const withChapters = await Promise.all(
@@ -26,10 +26,10 @@ export default async function HomePage() {
     <div className="space-y-10">
       <header className="space-y-3">
         <h1 className="font-[family-name:var(--font-display)] text-4xl text-[var(--ink)] md:text-5xl">
-          复习
+          面试
         </h1>
         <p className="max-w-lg text-[var(--ink-muted)]">
-          选择主题进入章节，逐题自测。掌握后可打勾淡化，重要题可收藏。
+          选择主题进入模块，逐题演练。掌握后可打勾淡化，重要题可收藏。
         </p>
       </header>
 
@@ -46,7 +46,7 @@ export default async function HomePage() {
 
       {!error && withChapters.length === 0 ? (
         <div className="space-y-4 border-t border-[var(--ink)]/10 pt-8">
-          <p className="text-[var(--ink-muted)]">还没有可复习的主题。</p>
+          <p className="text-[var(--ink-muted)]">还没有可准备的面试主题。</p>
           <Link
             href="/create"
             className="inline-block rounded-sm bg-[var(--ink)] px-5 py-2.5 text-sm text-[var(--paper)]"

@@ -34,15 +34,15 @@ export async function chooseGenerationModel(
 
     const { text } = await generateText({
       model,
-      prompt: `你是复习任务难度分流器。根据任务判断应使用简单模型还是高性能模型。
+      prompt: `你是面试任务难度分流器。根据任务判断应使用简单模型还是高性能模型。
 只输出一个词：simple 或 high（小写，不要其它文字）。
 
-任务类型：${params.kind === "chapters" ? "拆分复习章节" : "生成章节小题"}
+任务类型：${params.kind === "chapters" ? "拆分面试模块" : "生成面试题"}
 主题：「${params.topicTitle}」${chapterBlock}
 
 规则：
 - simple：入门科普、中小学基础、单一概念、常见通识
-- high：大学/考研/考证、系统性强、交叉学科、工程实践、易混淆考点多
+- high：大学/考研/考证、系统性强、交叉学科、工程实践、易混淆考点多、系统设计、线上排错、深度原理对比
 `,
     });
 
@@ -86,6 +86,8 @@ export function heuristicTier(params: ChooseGenerationModelParams): QwenTier {
     "架构",
     "并发",
     "底层",
+    "系统设计",
+    "排错",
   ];
 
   if (highHints.some((h) => haystack.includes(h))) return "high";

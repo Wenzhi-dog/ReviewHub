@@ -24,6 +24,19 @@ describe("heuristicTier", () => {
     ).toBe("high");
   });
 
+  it("returns high for interview system-design keywords", () => {
+    expect(
+      heuristicTier({ kind: "chapters", topicTitle: "系统设计入门" }),
+    ).toBe("high");
+    expect(
+      heuristicTier({
+        kind: "questions",
+        topicTitle: "线上",
+        chapterTitle: "排错",
+      }),
+    ).toBe("high");
+  });
+
   it("returns simple for short general topics", () => {
     expect(heuristicTier({ kind: "chapters", topicTitle: "摄影入门" })).toBe(
       "simple",

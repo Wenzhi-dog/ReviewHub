@@ -14,8 +14,8 @@ const body = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "ReviewHub · 知识点复习",
-  description: "用大模型拆分主题、生成小题与答案，专注复习。",
+  title: "面试",
+  description: "用大模型按面试模块拆分主题、生成面试题与参考答法。",
 };
 
 export default function RootLayout({
@@ -32,7 +32,7 @@ export default function RootLayout({
               href="/"
               className="font-[family-name:var(--font-display)] text-xl tracking-tight text-[var(--ink)]"
             >
-              ReviewHub
+              面试
             </Link>
             <Link
               href="/create"

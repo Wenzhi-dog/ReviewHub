@@ -8,7 +8,7 @@ export default function CreatePage() {
           新建主题
         </h1>
         <p className="text-[var(--ink-muted)]">
-          输入要复习的知识点，可上传 PDF / PPT 等资料，接下来会拆章节、出小题并生成答案。
+          输入要准备的面试方向，可上传 PDF / PPT 等资料，接下来会按面试模块拆分、出题并生成参考答法。
         </p>
       </header>
       <CreateTopicForm />
