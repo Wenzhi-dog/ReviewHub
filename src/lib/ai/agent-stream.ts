@@ -133,7 +133,8 @@ export function createAgentStreamResponse<TSchema extends z.ZodType>(
   return createUIMessageStreamResponse({ stream });
 }
 
-function extractJsonObject(text: string): unknown {
+/** Parse model JSON output (fenced or embedded). Exported for unit tests. */
+export function extractJsonObject(text: string): unknown {
   const trimmed = text.trim();
   if (!trimmed) {
     throw new Error("空响应");

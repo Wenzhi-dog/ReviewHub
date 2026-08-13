@@ -63,6 +63,8 @@ export function questionsPrompt(params: {
   chapterTitle: string;
   chapterSummary: string;
   current?: { stem: string }[];
+  priorQuestions?: { chapterTitle: string; stem: string }[];
+  otherChapters?: { title: string; summary: string }[];
   feedback?: string;
   enableSearch?: boolean;
   materialsBlock?: string;
@@ -71,8 +73,25 @@ export function questionsPrompt(params: {
   const hasMaterials = Boolean(params.materialsBlock?.trim());
   const currentBlock =
     params.current && params.current.length > 0
-      ? `\n当前小题列表：\n${params.current
+      ? `\n当前小题列表（本章已有，仅供按意见调整时参考）：\n${params.current
           .map((q, i) => `${i + 1}. ${q.stem}`)
+          .join("\n")}\n`
+      : "";
+
+  const otherChaptersBlock =
+    params.otherChapters && params.otherChapters.length > 0
+      ? `\n其它章节（请拉开考点，勿与其重复覆盖）：\n${params.otherChapters
+          .map(
+            (c, i) =>
+              `${i + 1}. ${c.title}${c.summary ? ` — ${c.summary}` : ""}`,
+          )
+          .join("\n")}\n`
+      : "";
+
+  const priorBlock =
+    params.priorQuestions && params.priorQuestions.length > 0
+      ? `\n其它章节已出题目（跨章记忆，严禁重复或近义改写）：\n${params.priorQuestions
+          .map((q, i) => `${i + 1}. [${q.chapterTitle}] ${q.stem}`)
           .join("\n")}\n`
       : "";
 
@@ -84,32 +103,41 @@ export function questionsPrompt(params: {
     ? `\n${params.materialsBlock.trim()}\n`
     : "";
 
+  const dedupeRules = `跨章去重（必须遵守）：
+- 不要重复或近义改写「其它章节已出题目」中的题干。
+- 不要考查其它章已覆盖的同一知识点或同一问法；本章聚焦本章概要与资料中的差异化考点。
+- 本批题目之间也要彼此区分，避免同义反复。`;
+
   let workflow: string;
   if (hasMaterials && enableSearch) {
     workflow = `工作方式：
 1. 优先依据用户参考资料中与本章相关的内容出题。
 2. 可联网搜索补充常见考点，但题干应能从资料或本章概要得到支撑。
-3. 最终以 JSON 对象返回，格式示例：
+3. ${dedupeRules}
+4. 最终以 JSON 对象返回，格式示例：
 {"questions":[{"stem":"题干内容"}]}
 每题仅含题干 stem。用中文。不要输出 Markdown 代码块或其他文字。`;
   } else if (hasMaterials) {
     workflow = `工作方式：
 1. 依据用户参考资料与章节概要思考出题角度，覆盖资料中的关键要点。
 2. 题干应可检验理解而非死记硬背；不要考查资料未涉及的冷门细节。
-3. 最终以 JSON 对象返回，格式示例：
+3. ${dedupeRules}
+4. 最终以 JSON 对象返回，格式示例：
 {"questions":[{"stem":"题干内容"}]}
 每题仅含题干 stem。用中文。不要输出 Markdown 代码块或其他文字。`;
   } else if (enableSearch) {
     workflow = `工作方式：
 1. 先联网搜索与本章相关的资料、常见考点或例题线索。
 2. 基于检索结果思考出题角度，题干应可检验理解而非死记硬背。
-3. 最终以 JSON 对象返回，格式示例：
+3. ${dedupeRules}
+4. 最终以 JSON 对象返回，格式示例：
 {"questions":[{"stem":"题干内容"}]}
 每题仅含题干 stem。用中文。不要输出 Markdown 代码块或其他文字。`;
   } else {
     workflow = `工作方式：
 1. 基于章节内容思考出题角度，题干应可检验理解而非死记硬背。
-2. 最终以 JSON 对象返回，格式示例：
+2. ${dedupeRules}
+3. 最终以 JSON 对象返回，格式示例：
 {"questions":[{"stem":"题干内容"}]}
 每题仅含题干 stem。用中文。不要输出 Markdown 代码块或其他文字。`;
   }
@@ -118,7 +146,7 @@ export function questionsPrompt(params: {
 主题：「${params.topicTitle}」
 章节：「${params.chapterTitle}」
 概要：${params.chapterSummary || "无"}
-${currentBlock}${materialsBlock}${feedbackBlock}
+${otherChaptersBlock}${priorBlock}${currentBlock}${materialsBlock}${feedbackBlock}
 
 ${workflow}`;
 }

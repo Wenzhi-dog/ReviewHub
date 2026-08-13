@@ -53,7 +53,8 @@ export async function chooseGenerationModel(
   }
 }
 
-function heuristicTier(params: ChooseGenerationModelParams): QwenTier {
+/** Fallback when the classifier call fails; exported for unit tests. */
+export function heuristicTier(params: ChooseGenerationModelParams): QwenTier {
   const haystack = [
     params.topicTitle,
     params.chapterTitle ?? "",

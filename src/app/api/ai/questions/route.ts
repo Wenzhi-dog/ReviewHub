@@ -1,6 +1,10 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { createAgentStreamResponse } from "@/lib/ai/agent-stream";
+import {
+  dedupeQuestionStems,
+  truncatePriorQuestions,
+} from "@/lib/ai/dedupe-stems";
 import { questionsPrompt } from "@/lib/ai/prompts";
 import { questionsSchema } from "@/lib/ai/schemas";
 import { chooseGenerationModel } from "@/lib/ai/select-model";
@@ -8,6 +12,8 @@ import { getDb } from "@/lib/db";
 import { chapters, questions } from "@/lib/db/schema";
 import {
   getOwnedTopic,
+  listActiveQuestionsForTopic,
+  listChapters,
   listMaterials,
   listQuestions,
   touchTopic,
@@ -53,6 +59,22 @@ export async function POST(request: Request) {
     }
 
     const existing = await listQuestions(chapter.id, true);
+    const allChapters = await listChapters(topic.id);
+    const otherChapters = allChapters
+      .filter((c) => c.id !== chapter.id)
+      .map((c) => ({ title: c.title, summary: c.summary }));
+
+    const topicQuestions = await listActiveQuestionsForTopic(topic.id);
+    const priorQuestions = truncatePriorQuestions(
+      topicQuestions
+        .filter((q) => q.chapterId !== chapter.id)
+        .map((q) => ({
+          chapterTitle: q.chapter.title,
+          stem: q.stem,
+        })),
+    );
+    const priorStems = priorQuestions.map((q) => q.stem);
+
     const materialRows = await listMaterials(topic.id);
     const materialsBlock = formatMaterialsForPrompt(
       materialRows.map((m) => ({
@@ -83,19 +105,27 @@ export async function POST(request: Request) {
         current: existing
           .filter((q) => !q.deletedAt)
           .map((q) => ({ stem: q.stem })),
+        priorQuestions:
+          priorQuestions.length > 0 ? priorQuestions : undefined,
+        otherChapters:
+          otherChapters.length > 0 ? otherChapters : undefined,
         feedback: body.feedback?.trim() || undefined,
         enableSearch,
         materialsBlock: materialsBlock || undefined,
       }),
       persist: async (output) => {
+        const toInsert = dedupeQuestionStems(output.questions, priorStems);
+
         await db.delete(questions).where(eq(questions.chapterId, chapter.id));
-        await db.insert(questions).values(
-          output.questions.map((q, i) => ({
-            chapterId: chapter.id,
-            stem: q.stem.trim(),
-            sortOrder: i,
-          })),
-        );
+        if (toInsert.length > 0) {
+          await db.insert(questions).values(
+            toInsert.map((q, i) => ({
+              chapterId: chapter.id,
+              stem: q.stem.trim(),
+              sortOrder: i,
+            })),
+          );
+        }
         await touchTopic(topic.id);
         return listQuestions(chapter.id);
       },
